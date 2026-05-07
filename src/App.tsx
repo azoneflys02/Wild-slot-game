@@ -15,7 +15,8 @@ import {
   Volume2,
   VolumeX,
   Star,
-  Lock
+  Lock,
+  ChevronDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -27,7 +28,7 @@ const SPIN_DURATION = 2000;
 const REEL_DELAY = 200;
 
 // --- Sound Engine ---
-const playSound = (type: 'spin' | 'stop' | 'win' | 'bigWin' | 'bonus', muted: boolean) => {
+const playSound = (type: 'spin' | 'stop' | 'win' | 'bigWin' | 'bonus' | 'land_standard' | 'land_wild' | 'land_scatter' | 'ambient_safari' | 'loss_thud', muted: boolean) => {
   if (muted || typeof window === 'undefined') return;
   
   try {
@@ -49,9 +50,25 @@ const playSound = (type: 'spin' | 'stop' | 'win' | 'bigWin' | 'bonus', muted: bo
     switch (type) {
       case 'spin':
         playTone(70, ctx.currentTime, 0.5, 'square', 0.03);
+        playTone(60, ctx.currentTime, 0.5, 'triangle', 0.05);
         break;
       case 'stop':
         playTone(120, ctx.currentTime, 0.15, 'triangle', 0.1);
+        break;
+      case 'loss_thud':
+        playTone(40, ctx.currentTime, 0.3, 'sine', 0.15);
+        playTone(60, ctx.currentTime, 0.2, 'triangle', 0.1);
+        break;
+      case 'land_standard':
+        playTone(180, ctx.currentTime, 0.1, 'sine', 0.05);
+        break;
+      case 'land_wild':
+        playTone(330, ctx.currentTime, 0.2, 'sine', 0.1);
+        playTone(440, ctx.currentTime + 0.05, 0.2, 'triangle', 0.08);
+        break;
+      case 'land_scatter':
+        playTone(523, ctx.currentTime, 0.2, 'square', 0.05);
+        playTone(659, ctx.currentTime + 0.05, 0.2, 'sine', 0.05);
         break;
       case 'win':
         [523.25, 659.25, 783.99].forEach((f, i) => {
@@ -61,12 +78,24 @@ const playSound = (type: 'spin' | 'stop' | 'win' | 'bigWin' | 'bonus', muted: bo
       case 'bigWin':
         [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
           playTone(f, ctx.currentTime + (i * 0.1), 1.0, 'triangle', 0.1);
+          playTone(f * 1.25, ctx.currentTime + (i * 0.1), 0.8, 'square', 0.02);
           playTone(f * 1.5, ctx.currentTime + (i * 0.1), 0.5, 'sine', 0.05);
         });
         break;
       case 'bonus':
-        playTone(110, ctx.currentTime, 2.0, 'sawtooth', 0.08);
-        playTone(440, ctx.currentTime + 0.1, 1.5, 'sine', 0.2);
+        // Pronounced bonus trigger sound
+        for (let i = 0; i < 5; i++) {
+          const startTime = ctx.currentTime + (i * 0.15);
+          playTone(440 * (1 + i * 0.2), startTime, 0.6, 'sawtooth', 0.05);
+          playTone(880 * (1 + i * 0.1), startTime, 0.4, 'sine', 0.1);
+        }
+        playTone(220, ctx.currentTime, 2.0, 'sawtooth', 0.05);
+        break;
+      case 'ambient_safari':
+        // Subtle ambient noises (insect buzzes, distant bird chirps simulated with oscillators)
+        const frequency = 2000 + Math.random() * 1000;
+        playTone(frequency, ctx.currentTime, 0.2, 'sine', 0.005);
+        playTone(frequency * 1.5, ctx.currentTime + 0.1, 0.1, 'sine', 0.003);
         break;
     }
   } catch (e) {
@@ -95,16 +124,26 @@ const SYMBOLS: Symbol[] = [
 ];
 
 const PAYLINES = [
-  [1, 1, 1, 1, 1], // Middle row
-  [0, 0, 0, 0, 0], // Top row
-  [2, 2, 2, 2, 2], // Bottom row
-  [0, 1, 2, 1, 0], // V-shape
-  [2, 1, 0, 1, 2], // Inverted V
-  [0, 0, 1, 0, 0], // Small peak
-  [2, 2, 1, 2, 2], // Small valley
-  [1, 0, 0, 0, 1], // Arch
-  [1, 2, 2, 2, 1], // Inverted arch
-  [0, 2, 0, 2, 0], // Zigzag
+  [1, 1, 1, 1, 1], // 1: Middle row
+  [0, 0, 0, 0, 0], // 2: Top row
+  [2, 2, 2, 2, 2], // 3: Bottom row
+  [0, 1, 2, 1, 0], // 4: V-shape
+  [2, 1, 0, 1, 2], // 5: Inverted V
+  [0, 0, 1, 2, 2], // 6: Step down
+  [2, 2, 1, 0, 0], // 7: Step up
+  [1, 0, 1, 2, 1], // 8: M-shape
+  [1, 2, 1, 0, 1], // 9: W-shape
+  [0, 2, 0, 2, 0], // 10: Big Zigzag
+  [2, 0, 2, 0, 2], // 11: Big Zigzag Inverted
+  [1, 0, 0, 0, 1], // 12: Arch
+  [1, 2, 2, 2, 1], // 13: Inverted arch
+  [0, 1, 0, 1, 0], // 14: Top Zigzag
+  [2, 1, 2, 1, 2], // 15: Bottom Zigzag
+  [0, 2, 2, 2, 0], // 16: Deep Arch
+  [2, 0, 0, 0, 2], // 17: Deep Inverted Arch
+  [1, 1, 0, 1, 1], // 18: Middle Bump
+  [1, 1, 2, 1, 1], // 19: Middle Dip
+  [0, 1, 1, 1, 0], // 20: Top Flattened Arch
 ];
 
 // --- Helper Functions ---
@@ -118,6 +157,52 @@ const generateGrid = () => {
 };
 
 // --- Components ---
+
+const PaylineOverlay = ({ winningLines, isSpinning }: { winningLines: number[], isSpinning: boolean }) => {
+  if (isSpinning || winningLines.length === 0) return null;
+
+  return (
+    <svg 
+      className="absolute inset-0 pointer-events-none z-20 w-full h-full px-2 md:px-4" 
+      viewBox="0 0 500 300" 
+      preserveAspectRatio="none"
+    >
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      {winningLines.map((lineIdx) => {
+        const path = PAYLINES[lineIdx];
+        const points = path.map((row, col) => {
+          const x = (col * 100) + 50;
+          const y = (row * 100) + 50;
+          return `${x},${y}`;
+        }).join(' ');
+        
+        return (
+          <motion.polyline
+            key={`line-${lineIdx}`}
+            points={points}
+            fill="none"
+            stroke="#fbbf24"
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            filter="url(#glow)"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          />
+        );
+      })}
+    </svg>
+  );
+};
 
 const SlotSymbol = ({ 
   symbol, 
@@ -258,11 +343,8 @@ export default function App() {
   });
   const [bet, setBet] = useState(() => {
     const saved = localStorage.getItem('safari_slots_bet');
-    return saved ? parseInt(saved) : 10;
-  });
-  const [multiplier, setMultiplier] = useState(() => {
-    const saved = localStorage.getItem('safari_slots_multiplier');
-    return saved ? parseInt(saved) : 1;
+    const b = saved ? parseInt(saved) : 10;
+    return Math.max(10, b);
   });
   const [grid, setGrid] = useState(generateGrid());
   const [isSpinning, setIsSpinning] = useState(false);
@@ -293,23 +375,40 @@ export default function App() {
     const saved = localStorage.getItem('safari_slots_session_winnings');
     return saved ? parseFloat(saved) : 0;
   });
+  const [activePaylines, setActivePaylines] = useState(() => {
+    const saved = localStorage.getItem('safari_slots_active_lines');
+    return saved ? parseInt(saved) : 20;
+  });
+  const [showPaylineDropdown, setShowPaylineDropdown] = useState(false);
 
   // --- Persistence Effect ---
   useEffect(() => {
     localStorage.setItem('safari_slots_balance', balance.toString());
     localStorage.setItem('safari_slots_bet', bet.toString());
-    localStorage.setItem('safari_slots_multiplier', multiplier.toString());
     localStorage.setItem('safari_slots_free_spins', freeSpins.toString());
     localStorage.setItem('safari_slots_total_free_win', totalFreeWin.toString());
     localStorage.setItem('safari_slots_jackpot', jackpot.toString());
     localStorage.setItem('safari_slots_autoplay_config', JSON.stringify(autoPlayConfig));
     localStorage.setItem('safari_slots_session_winnings', sessionWinnings.toString());
-  }, [balance, bet, multiplier, freeSpins, totalFreeWin, jackpot, autoPlayConfig, sessionWinnings]);
+    localStorage.setItem('safari_slots_active_lines', activePaylines.toString());
+  }, [balance, bet, freeSpins, totalFreeWin, jackpot, autoPlayConfig, sessionWinnings, activePaylines]);
   const [sessionSpinsLeft, setSessionSpinsLeft] = useState(0);
   const [sessionStartingBalance, setSessionStartingBalance] = useState(0);
 
   const [muted, setMuted] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+
+  // --- Ambient Sound Effect ---
+  useEffect(() => {
+    if (muted) return;
+    const interval = setInterval(() => {
+      if (Math.random() > 0.7) {
+        playSound('ambient_safari', muted);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [muted]);
 
   // --- Logic ---
 
@@ -317,7 +416,7 @@ export default function App() {
     let totalWin = 0;
     const lines: number[] = [];
 
-    PAYLINES.forEach((line, index) => {
+    PAYLINES.slice(0, activePaylines).forEach((line, index) => {
       const firstSymbol = currentGrid[0][line[0]];
       let matches = 1;
 
@@ -348,7 +447,7 @@ export default function App() {
         }
 
         const payoutMultiplier = matches === 3 ? 1 : matches === 4 ? 5 : 20;
-        const lineWin = valuedSymbol.value * payoutMultiplier * (bet / 10) * multiplier;
+        const lineWin = valuedSymbol.value * payoutMultiplier * (bet / 10);
         totalWin += lineWin;
         lines.push(index);
       }
@@ -362,100 +461,113 @@ export default function App() {
 
     if (scatterCount >= 3) {
       setFreeSpins(prev => prev + 10);
-      if (!muted) {
-        // Trigger a specific fanfare for scatter?
-      }
     }
 
     return { totalWin, lines };
-  }, [bet, muted]);
+  }, [bet, activePaylines]);
 
   const handleSpin = useCallback(() => {
     const lockCost = lockedPositions.size * 5;
-    const totalStake = (bet * multiplier) + lockCost;
+    const lineBetMultiplier = activePaylines / 20;
+    const totalStake = (bet * lineBetMultiplier) + lockCost;
     
+    // Use the latest balance and freeSpins for the check
     if (isSpinning || (balance < totalStake && freeSpins === 0)) {
       setAutoPlay(false);
       return;
     }
 
-    if (freeSpins === 0) {
-      setBalance(prev => prev - totalStake);
-      setJackpot(prev => prev + ((totalStake - lockCost) * 0.01)); 
-      setTotalFreeWin(0);
-    }
+    // Capture current state values needed for the setTimeout logic
+    const currentLockedSize = lockedPositions.size;
+    const currentFreeSpins = freeSpins;
+    const currentMuted = muted;
+    const currentGridState = grid;
+    const currentJackpot = jackpot;
 
     setIsSpinning(true);
     setWinningLines([]);
     setLastWin(0);
-    playSound('spin', muted);
+    playSound('spin', currentMuted);
+
+    if (currentFreeSpins === 0) {
+      setBalance(prev => prev - totalStake);
+      setSessionWinnings(prev => prev - totalStake);
+      setJackpot(prev => prev + ((totalStake - (currentLockedSize * 5)) * 0.01)); 
+      setTotalFreeWin(0);
+    }
 
     const newGrid = Array(COLS).fill(null).map((_, colIdx) => 
       Array(ROWS).fill(null).map((_, rowIdx) => {
         if (lockedPositions.has(`${colIdx}-${rowIdx}`)) {
-          return grid[colIdx][rowIdx];
+          return currentGridState[colIdx][rowIdx];
         }
         return getRandomSymbol();
       })
     );
 
-    setTimeout(() => {
+    const completeSpin = () => {
       setGrid(newGrid);
       setIsSpinning(false);
-      playSound('stop', muted);
+      
+      // Symbol-specific landing sounds
+      newGrid.forEach((col, colIdx) => {
+        setTimeout(() => {
+          let soundToPlay: 'land_standard' | 'land_wild' | 'land_scatter' = 'land_standard';
+          if (col.some(s => s.type === 'wild')) soundToPlay = 'land_wild';
+          else if (col.some(s => s.type === 'scatter')) soundToPlay = 'land_scatter';
+          playSound(soundToPlay, currentMuted);
+        }, colIdx * REEL_DELAY);
+      });
+
       setLockedPositions(new Set()); // Reset locks after spin
       
       const { totalWin, lines } = checkWins(newGrid);
-      const finalWin = freeSpins > 0 ? totalWin * 3 : totalWin;
+      const finalWin = currentFreeSpins > 0 ? totalWin * 3 : totalWin;
 
       if (finalWin > 0) {
         setLastWin(finalWin);
         setWinningLines(lines);
         setBalance(prev => prev + finalWin);
         setSessionWinnings(prev => prev + finalWin);
-        if (freeSpins > 0) setTotalFreeWin(prev => prev + finalWin);
+        if (currentFreeSpins > 0) setTotalFreeWin(prev => prev + finalWin);
         
-        // Determine Win Type
         if (finalWin >= totalStake * 20) {
           setWinType('mega');
-          playSound('bigWin', muted);
+          playSound('bigWin', currentMuted);
           confetti({
-            particleCount: 200,
-            spread: 90,
-            origin: { y: 0.5 },
+            particleCount: 200, spread: 90, origin: { y: 0.5 },
             colors: ['#fbbf24', '#ffffff', '#10b981', '#3b82f6']
           });
         } else if (finalWin >= totalStake * 5) {
           setWinType('big');
-          playSound('bigWin', muted);
+          playSound('bigWin', currentMuted);
           confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
+            particleCount: 100, spread: 70, origin: { y: 0.6 },
             colors: ['#fbbf24', '#f59e0b']
           });
         } else {
           setWinType('small');
-          playSound('win', muted);
+          playSound('win', currentMuted);
         }
         
-        // Single Win Limit Check
         if (autoPlay && autoPlayConfig.winLimit > 0 && finalWin >= autoPlayConfig.winLimit) {
           setAutoPlay(false);
         }
       } else {
         setWinType('none');
+        playSound('loss_thud', currentMuted);
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 300);
       }
 
       // Loss Limit Check
       if (autoPlay && autoPlayConfig.lossLimit > 0) {
-        const currentLoss = sessionStartingBalance - (balance + finalWin - (freeSpins > 0 ? 0 : totalStake));
+        const currentLoss = sessionStartingBalance - (balance + finalWin - (currentFreeSpins > 0 ? 0 : totalStake));
         if (currentLoss >= autoPlayConfig.lossLimit) {
           setAutoPlay(false);
         }
       }
 
-      // Spin Count Check
       if (autoPlay && sessionSpinsLeft > 0) {
         setSessionSpinsLeft(prev => {
           if (prev <= 1) setAutoPlay(false);
@@ -463,37 +575,24 @@ export default function App() {
         });
       }
 
-      // Check for scatters for bonus sound
-      let scatterCount = 0;
-      newGrid.forEach(col => col.forEach(sym => {
-        if (sym.type === 'scatter') scatterCount++;
-      }));
-      if (scatterCount >= 3) {
-        playSound('bonus', muted);
-      }
-
-      // --- Jackpot Win Check (0.05% chance per spin) ---
       const isJackpotWin = Math.random() < 0.0005;
-      if (isJackpotWin && freeSpins === 0) {
-        const jackpotWinAmount = jackpot;
+      if (isJackpotWin && currentFreeSpins === 0) {
+        const jackpotWinAmount = currentJackpot;
         setBalance(prev => prev + jackpotWinAmount);
         setLastWin(jackpotWinAmount);
         setShowJackpotWin(true);
-        setJackpot(10000.00); // Reset to base
-        playSound('bigWin', muted);
-        confetti({
-          particleCount: 300,
-          spread: 100,
-          origin: { y: 0.3 },
-          colors: ['#34d399', '#fbbf24', '#ffffff']
-        });
+        setJackpot(10000.00); 
+        playSound('bigWin', currentMuted);
+        confetti({ particleCount: 300, spread: 100, origin: { y: 0.3 }, colors: ['#34d399', '#fbbf24', '#ffffff'] });
       }
 
-      if (freeSpins > 0) {
+      if (currentFreeSpins > 0) {
         setFreeSpins(prev => prev - 1);
       }
-    }, SPIN_DURATION + (REEL_DELAY * COLS));
-  }, [isSpinning, balance, bet, multiplier, freeSpins, checkWins, muted, autoPlay, autoPlayConfig, sessionStartingBalance, sessionSpinsLeft]);
+    };
+
+    setTimeout(completeSpin, SPIN_DURATION + (REEL_DELAY * COLS));
+  }, [isSpinning, balance, bet, activePaylines, lockedPositions, grid, freeSpins, jackpot, checkWins, muted, autoPlay, autoPlayConfig, sessionStartingBalance, sessionSpinsLeft]);
 
   const startAutoPlay = () => {
     setSessionSpinsLeft(autoPlayConfig.spins);
@@ -564,9 +663,9 @@ export default function App() {
         <div className="flex items-center gap-4 md:gap-8">
           <div className="flex gap-4 md:gap-6 items-center">
             <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">Session Profit</span>
-              <span className="text-xl font-mono font-black text-yellow-400 tabular-nums">
-                +${sessionWinnings.toLocaleString()}
+              <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">Session Net</span>
+              <span className={`text-xl font-mono font-black tabular-nums ${sessionWinnings >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                {sessionWinnings >= 0 ? '+' : '-'}${Math.abs(sessionWinnings).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="hidden sm:block h-8 w-[1px] bg-white/10" />
@@ -620,10 +719,18 @@ export default function App() {
         </AnimatePresence>
 
         {/* The Machine */}
-        <div className="relative p-2 md:p-4 bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-[2.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border-4 border-neutral-700/50">
+        <motion.div 
+          animate={isShaking ? {
+            x: [0, -5, 5, -5, 5, 0],
+            y: [0, 2, -2, 2, -2, 0]
+          } : {}}
+          transition={{ duration: 0.25 }}
+          className="relative p-2 md:p-4 bg-gradient-to-br from-neutral-800 to-neutral-900 rounded-[2.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.8)] border-4 border-neutral-700/50"
+        >
           <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 via-yellow-500 to-emerald-500 opacity-20 blur-xl"></div>
           
           <div className="grid grid-cols-5 gap-1 md:gap-3 relative">
+            <PaylineOverlay winningLines={winningLines} isSpinning={isSpinning} />
             {grid.map((col, i) => (
               <Reel 
                 key={`reel-${i}`} 
@@ -644,11 +751,11 @@ export default function App() {
             <div className="w-3 md:w-5 h-3 md:h-5 rounded-full bg-red-500/30"></div>
             <div className="w-3 md:w-5 h-3 md:h-5 rounded-full bg-blue-500/30"></div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Ways to Win Banner */}
         <div className="mt-8 px-8 md:px-12 py-3 bg-white/5 rounded-full backdrop-blur-md border border-white/10 flex gap-4 md:gap-6 text-xs md:text-sm uppercase tracking-widest font-bold">
-          <span className="text-emerald-400">10 Paylines Active</span>
+          <span className="text-emerald-400">{activePaylines} Paylines Active</span>
           <span className="text-white/20">|</span>
           <span className="text-yellow-400">Bonus x3 Multiplier</span>
         </div>
@@ -680,7 +787,7 @@ export default function App() {
       <footer className="relative z-10 h-32 bg-black/60 backdrop-blur-xl border-t border-white/5 px-6 md:px-10 flex items-center justify-between">
         <div className="flex gap-4 md:gap-10 items-center">
           <div className="flex flex-col">
-            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Base Bet</label>
+            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Bet</label>
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setBet(b => Math.max(10, b - 10))}
@@ -691,38 +798,75 @@ export default function App() {
               </button>
               <span className="text-xl font-mono font-bold min-w-[60px] text-center">${bet}</span>
               <button 
-                onClick={() => setBet(b => b + 10)}
+                onClick={() => setBet(b => Math.min(500, b + 10))}
                 disabled={isSpinning}
                 className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors disabled:opacity-20"
               >
                 +
               </button>
+              <button 
+                onClick={() => setBet(500)}
+                disabled={isSpinning}
+                className={`px-2 h-8 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 text-[10px] font-black tracking-tighter hover:bg-emerald-500/20 transition-all ${bet === 500 ? 'bg-emerald-500 text-black border-emerald-500' : ''}`}
+              >
+                MAX
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-col">
-            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Multiplier</label>
-            <div className="flex bg-white/5 rounded-lg p-0.5 gap-0.5">
-              {[1, 2, 5].map(m => (
-                <button
-                  key={`mult-${m}`}
-                  onClick={() => setMultiplier(m)}
-                  disabled={isSpinning}
-                  className={`px-3 py-1.5 rounded-md text-[10px] font-black transition-all ${
-                    multiplier === m 
-                      ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20' 
-                      : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-                  }`}
-                >
-                  {m}X
-                </button>
-              ))}
-            </div>
+          <div className="flex flex-col relative">
+            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Lines</label>
+            <button
+              onClick={() => !isSpinning && setShowPaylineDropdown(!showPaylineDropdown)}
+              disabled={isSpinning}
+              className={`h-8 px-4 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between gap-3 text-xs font-black transition-all hover:bg-white/10 disabled:opacity-50 min-w-[80px] ${
+                showPaylineDropdown ? 'border-blue-500/50 ring-2 ring-blue-500/20' : ''
+              }`}
+            >
+              <span className="text-white">{activePaylines}</span>
+              <ChevronDown className={`w-3 h-3 text-white/40 transition-transform duration-300 ${showPaylineDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {showPaylineDropdown && (
+                <>
+                  {/* Backdrop to close dropdown */}
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowPaylineDropdown(false)} 
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: -4, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a1c] border border-white/10 rounded-xl shadow-2xl p-1 z-50 overflow-hidden"
+                  >
+                    {[5, 10, 15, 20].map(l => (
+                      <button
+                        key={`line-opt-${l}`}
+                        onClick={() => {
+                          setActivePaylines(l);
+                          setShowPaylineDropdown(false);
+                        }}
+                        className={`w-full px-4 py-2 rounded-lg text-left text-xs font-bold transition-all flex items-center justify-between group ${
+                          activePaylines === l 
+                            ? 'bg-blue-500 text-white' 
+                            : 'text-white/60 hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {l} Lines
+                        {activePaylines === l && <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_white]" />}
+                      </button>
+                    ))}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="hidden lg:flex flex-col border-l border-white/10 pl-6">
-            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Total Stake</label>
-            <span className="text-xl font-mono font-bold text-emerald-400 font-black">${(bet * multiplier) + (lockedPositions.size * 5)}</span>
+            <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 font-bold">Total Bet</label>
+            <span className="text-xl font-mono font-bold text-emerald-400 font-black">${(bet * (activePaylines / 20)) + (lockedPositions.size * 5)}</span>
           </div>
           
           <div className="hidden md:flex flex-col">
@@ -752,10 +896,10 @@ export default function App() {
           <div className="h-20 w-20 rounded-full border-4 border-emerald-500/30 flex items-center justify-center relative">
             <button
               onClick={handleSpin}
-              disabled={isSpinning || (balance < bet && freeSpins === 0)}
+              disabled={isSpinning || (balance < (bet * (activePaylines / 20)) && freeSpins === 0)}
               className={`
                 h-16 w-16 rounded-full flex items-center justify-center transition-all relative overflow-hidden group
-                ${(isSpinning || (balance < bet && freeSpins === 0))
+                ${(isSpinning || (balance < (bet * (activePaylines / 20)) && freeSpins === 0))
                   ? 'bg-emerald-900/50 text-white/30 cursor-not-allowed'
                   : 'bg-gradient-to-tr from-emerald-600 to-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-90 scale-100 hover:scale-105'
                 }
@@ -768,27 +912,13 @@ export default function App() {
               )}
             </button>
           </div>
-          <button 
-            disabled={isSpinning}
-            onClick={() => setBalance(1000)}
-            className="h-10 px-4 md:h-12 md:px-6 bg-neutral-800 rounded-xl border border-white/10 hover:bg-neutral-700 font-bold uppercase tracking-widest text-[10px] md:text-xs transition-colors"
-          >
-            Reset Credit
-          </button>
+          {/* Debug buttons moved/removed for better UX */}
         </div>
 
         <div className="flex gap-2">
             <div className="hidden md:flex flex-col text-right mr-4">
-              <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">243 Ways</p>
-              <p className="text-xs font-bold text-emerald-400">PRO MODE</p>
-            </div>
-            <div className="flex gap-2">
-               <button 
-                 onClick={() => setBalance(prev => prev + 1000)}
-                 className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/60 hover:text-white transition-colors"
-               >
-                  <Coins className="w-5 h-5" />
-               </button>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold">{activePaylines} Lines</p>
+              <p className="text-xs font-bold text-emerald-400">PAYLINE MODE</p>
             </div>
         </div>
       </footer>
@@ -809,7 +939,7 @@ export default function App() {
                 className="bg-black/60 backdrop-blur-md px-8 py-3 rounded-2xl border border-white/20 shadow-xl"
               >
                 <p className="text-white text-xs font-black uppercase tracking-widest text-center mb-1">Nice Win!</p>
-                <p className="text-2xl font-black text-emerald-400 italic">+${lastWin.toLocaleString()}</p>
+                <p className="text-2xl font-black text-emerald-400 italic">+${lastWin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </motion.div>
             )}
 
@@ -825,7 +955,7 @@ export default function App() {
                   transition={{ repeat: Infinity, duration: 0.4 }}
                   className="text-5xl md:text-7xl font-black text-white drop-shadow-xl tabular-nums italic"
                 >
-                  ${lastWin.toLocaleString()}
+                  ${lastWin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </motion.p>
               </motion.div>
             )}
@@ -851,7 +981,7 @@ export default function App() {
                     transition={{ duration: 0.3, repeat: Infinity }}
                     className="text-6xl md:text-8xl font-black text-white italic drop-shadow-lg tabular-nums"
                   >
-                    ${lastWin.toLocaleString()}
+                    ${lastWin.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </motion.p>
                 </div>
               </motion.div>
